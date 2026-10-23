@@ -4,6 +4,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { authStorageKey } from './domain/authFlow'
+import { saveColonyData, loadColonyData } from './data/colonyRepository'
+import { fixtureBreedingCage, fixtureLitter } from './test/fixtures'
 
 vi.mock('./services/productionConfig', () => ({
   getProductionConfig: () => ({
@@ -116,6 +118,38 @@ describe('colony line filtering', () => {
     expect(within(overview).getByText('Prex1')).toBeInTheDocument()
     expect(within(overview).getByText('RGS2')).toBeInTheDocument()
     expect(within(overview).getByText('Arhgef-25')).toBeInTheDocument()
+  })
+
+  it('sorts complete breeding rows by existing cage number and remembers the choice', () => {
+    const cages = ['10', '2', '1'].map((cage, index) => ({
+      ...fixtureBreedingCage,
+      id: `breeding-${cage}`,
+      cage,
+      maleDob: `2026-01-0${index + 1}`,
+      femaleDob: `2026-02-0${index + 1}`,
+      notes: `Parents for cage ${cage}`,
+    }))
+    const litter = { ...fixtureLitter, breedingCageId: 'breeding-10', breedingCageLabel: '10' }
+    const original = { breeding: cages, individual: [], work: [], litters: [litter], protocols: [] }
+    saveColonyData(original)
+    const app = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Breeding cages' }))
+    const rowText = () => within(screen.getByRole('table')).getAllByRole('row').slice(1).map(row => row.textContent)
+    const before = rowText()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-sort cage numbers' }))
+    expect(rowText()).toEqual([before[2], before[1], before[0]])
+    expect(loadColonyData()).toEqual(original)
+    fireEvent.click(screen.getByRole('button', { name: 'Edit breeding cage 10' }))
+    expect(screen.getByLabelText('Male DOB')).toHaveValue(cages[0].maleDob)
+    expect(screen.getByLabelText('Female DOB')).toHaveValue(cages[0].femaleDob)
+    app.unmount()
+
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: 'Breeding cages' }))
+    expect(rowText()).toEqual([before[2], before[1], before[0]])
+    fireEvent.click(screen.getByRole('button', { name: 'RGS2' }))
+    expect(rowText()).toEqual([before[2], before[1], before[0]])
   })
 
   it('opens and closes the current genotype summary report', async () => {

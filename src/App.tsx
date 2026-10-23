@@ -69,6 +69,7 @@ import {
   type LabDirectoryEntry,
 } from './domain/authFlow'
 import { buildImportProfile } from './domain/importProfile'
+import { sortBreedingCages } from './domain/cageSorting'
 import { getLitterStatus, litterDates, transferLitter } from './domain/litterRules'
 import {
   archiveColonyLine,
@@ -279,6 +280,7 @@ function App() {
   const [data, setDataState] = useState<ColonyData>(loadColonyData)
   const [view, setView] = useState<View>('dashboard')
   const [activeLine, setActiveLine] = useState('All lines')
+  const [sortBreedingByNumber, setSortBreedingByNumber] = useState(() => localStorage.getItem('colony-ops-breeding-sort') === 'cage')
   const [query, setQuery] = useState('')
   const [individualDashboardFilter, setIndividualDashboardFilter] = useState<IndividualDashboardFilter | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -478,8 +480,11 @@ function App() {
   }
 
   const lineBreeding = useMemo(
-    () => activeLine === 'All lines' ? data.breeding : data.breeding.filter((cage) => cage.line === activeLine),
-    [activeLine, data.breeding],
+    () => {
+      const cages = activeLine === 'All lines' ? data.breeding : data.breeding.filter((cage) => cage.line === activeLine)
+      return sortBreedingByNumber ? sortBreedingCages(cages) : cages
+    },
+    [activeLine, data.breeding, sortBreedingByNumber],
   )
 
   const lineIndividual = useMemo(
@@ -1398,7 +1403,11 @@ function App() {
             </>
           )}
 
-          {view === 'breeding' && <BreedingTable rows={breeding} onAdd={() => setManualCageForm('breeding')} onEdit={setEditingBreedingCage} onDelete={deleteBreedingCage} />}
+          {view === 'breeding' && <BreedingTable rows={breeding} onAdd={() => setManualCageForm('breeding')} onEdit={setEditingBreedingCage} onDelete={deleteBreedingCage} onSort={() => {
+            setSortBreedingByNumber(true)
+            localStorage.setItem('colony-ops-breeding-sort', 'cage')
+            flash('Breeding cages sorted by cage number')
+          }} />}
           {view === 'litters' && selectedLitter && (
             <LitterWorkspace litter={selectedLitter} onBack={() => setSelectedLitterId(null)} onSave={updateLitter} onTransfer={confirmWeanTransfer} />
           )}
@@ -2213,13 +2222,14 @@ function IndividualCageDialog({ lines, defaultLine, initialCage, onClose, onSave
   )
 }
 
-function BreedingTable({ rows, onAdd, onEdit, onDelete }: { rows: BreedingCage[]; onAdd: () => void; onEdit: (cage: BreedingCage) => void; onDelete: (cageId: string) => void }) {
+function BreedingTable({ rows, onAdd, onEdit, onDelete, onSort }: { rows: BreedingCage[]; onAdd: () => void; onEdit: (cage: BreedingCage) => void; onDelete: (cageId: string) => void; onSort: () => void }) {
   return (
     <div className="table-panel">
       <div className="table-toolbar">
         <span>{rows.length} cages</span>
         <div className="table-actions">
           <div className="legend"><i className="priority-key" />Priority <i className="age-key" />Older breeder</div>
+          <button className="button secondary table-action-button" onClick={onSort}>Auto-sort cage numbers</button>
           <button className="button secondary table-action-button" onClick={onAdd}><CirclePlus size={15} />Add breeding cage</button>
         </div>
       </div>
